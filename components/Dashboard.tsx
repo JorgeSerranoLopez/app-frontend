@@ -1,13 +1,14 @@
 import React from 'react';
-import { PlusCircle, Clock, CheckCircle2, MapPin, Truck, Inbox } from 'lucide-react';
+import { PlusCircle, Clock, CheckCircle2, MapPin, Truck, Inbox, Trash2, ArrowRight } from 'lucide-react';
 import { User } from '../types';
 
 interface Props {
   user: User;
   onStartQuote: () => void;
+  onDeleteQuote: (id: string) => void;
 }
 
-export const Dashboard: React.FC<Props> = ({ user, onStartQuote }) => {
+export const Dashboard: React.FC<Props> = ({ user, onStartQuote, onDeleteQuote }) => {
   const history = user.history || [];
 
   return (
@@ -66,27 +67,32 @@ export const Dashboard: React.FC<Props> = ({ user, onStartQuote }) => {
                 <tr>
                   <th className="px-6 py-4">Fecha</th>
                   <th className="px-6 py-4">Ruta</th>
+                  <th className="px-6 py-4">Distancia</th>
                   <th className="px-6 py-4">Camión</th>
-                  <th className="px-6 py-4">Bloques</th>
-                  <th className="px-6 py-4">Precio Est.</th>
+                  <th className="px-6 py-4">Precio Total</th>
                   <th className="px-6 py-4">Estado</th>
+                  <th className="px-6 py-4 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {history.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 font-medium whitespace-nowrap">{item.date}</td>
-                    <td className="px-6 py-4 flex items-center gap-2 whitespace-nowrap">
-                      <MapPin className="w-4 h-4 text-slate-400" />
-                      {item.route}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        <span className="font-medium">{item.origin}</span>
+                        <ArrowRight className="w-3 h-3 text-slate-300" />
+                        <span className="font-medium">{item.destination}</span>
+                      </div>
                     </td>
+                    <td className="px-6 py-4">{item.distance} km</td>
                     <td className="px-6 py-4">
                         <span className="font-bold bg-slate-100 px-2 py-1 rounded text-slate-700">
                            {item.truck}
                         </span>
                     </td>
-                    <td className="px-6 py-4">{item.blocks}</td>
-                    <td className="px-6 py-4 font-medium text-slate-800">${item.price}</td>
+                    <td className="px-6 py-4 font-medium text-slate-800">${item.totalPrice.toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -98,6 +104,15 @@ export const Dashboard: React.FC<Props> = ({ user, onStartQuote }) => {
                         {item.status === 'Reservado' && <CheckCircle2 className="w-3 h-3" />}
                         {item.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                        <button 
+                            onClick={() => onDeleteQuote(item.id)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Eliminar cotización"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
                     </td>
                   </tr>
                 ))}

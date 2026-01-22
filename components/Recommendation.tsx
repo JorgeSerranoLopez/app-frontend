@@ -1,165 +1,140 @@
-import React, { useState } from 'react';
-import { Truck, Check, X, ArrowLeft, DollarSign, Save, MapPin } from 'lucide-react';
-import { TRUCK_CAPACITY, Quote } from '../types';
+import React from 'react';
+import { Truck, Check, X, ArrowLeft, ArrowRight, DollarSign, Save, MapPin, Route } from 'lucide-react';
+import { TRUCK_CAPACITY, TRUCK_BASE_PRICES, PRICE_PER_KM, Quote } from '../types';
 
 interface Props {
   totalBlocks: number;
+  origin: string;
+  destination: string;
+  distance: number;
   onBack: () => void;
   onSave: (quote: Omit<Quote, 'id' | 'date' | 'status'>) => void;
 }
 
-export const Recommendation: React.FC<Props> = ({ totalBlocks, onBack, onSave }) => {
-  const [route, setRoute] = useState('');
-  const [error, setError] = useState('');
+export const Recommendation: React.FC<Props> = ({ 
+  totalBlocks, 
+  origin, 
+  destination, 
+  distance, 
+  onBack, 
+  onSave 
+}) => {
+  
+  // Logic to determine best truck
+  let recommendedSize = '';
+  if (totalBlocks <= TRUCK_CAPACITY.S) recommendedSize = 'S';
+  else if (totalBlocks <= TRUCK_CAPACITY.M) recommendedSize = 'M';
+  else if (totalBlocks <= TRUCK_CAPACITY.L) recommendedSize = 'L';
+  else if (totalBlocks <= TRUCK_CAPACITY.XL) recommendedSize = 'XL';
+  else recommendedSize = 'OVERFLOW';
 
-  // Logic: Recommend M if > 36
-  const recommendM = totalBlocks > TRUCK_CAPACITY.S;
-  const recommendedTruck = recommendM ? 'M' : 'S';
-  const estimatedPrice = recommendM ? 200 : 120;
+  const isOverflow = recommendedSize === 'OVERFLOW';
+  
+  // Calculate Prices
+  const getPrice = (size: 'S' | 'M' | 'L' | 'XL') => {
+      const base = TRUCK_BASE_PRICES[size];
+      const distanceCost = distance * PRICE_PER_KM;
+      return { base, distanceCost, total: base + distanceCost };
+  };
+
+  const currentPricing = !isOverflow ? getPrice(recommendedSize as any) : { base: 0, distanceCost: 0, total: 0 };
 
   const handleSave = () => {
-    if (!route.trim()) {
-      setError('Por favor ingresa una ruta o nombre para la cotización.');
-      return;
-    }
     onSave({
-      route: route,
-      truck: `Camión ${recommendedTruck}`,
+      origin,
+      destination,
+      distance,
+      truck: `Camión ${recommendedSize}`,
       blocks: totalBlocks,
-      price: estimatedPrice
+      basePrice: currentPricing.base,
+      distancePrice: currentPricing.distanceCost,
+      totalPrice: currentPricing.total
     });
   };
   
-  const TruckCard = ({ 
-    size, 
-    capacity, 
-    recommended, 
-    disabled,
-    price 
-  }: { 
-    size: 'S' | 'M', 
-    capacity: number, 
-    recommended: boolean, 
-    disabled: boolean,
-    price: number
-  }) => (
-    <div className={`relative overflow-hidden rounded-2xl border-2 transition-all duration-300 flex flex-col ${
-      recommended 
-        ? 'border-green-500 bg-white shadow-2xl scale-105 z-10' 
-        : disabled 
-          ? 'border-red-200 bg-red-50 opacity-60 grayscale' 
-          : 'border-slate-200 bg-white hover:border-blue-300'
-    }`}>
-      {recommended && (
-        <div className="absolute top-0 inset-x-0 bg-green-500 text-white text-center text-xs font-bold uppercase tracking-widest py-1">
-          Recomendado
-        </div>
-      )}
-      {disabled && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-20 backdrop-blur-[1px]">
-             <div className="bg-red-100 text-red-600 px-4 py-2 rounded-full font-bold flex items-center gap-2 border border-red-200 shadow-sm">
-                <X className="w-5 h-5" />
-                Espacio Insuficiente
-             </div>
-        </div>
-      )}
-
-      <div className={`p-8 flex flex-col h-full ${recommended ? 'pt-10' : ''}`}>
-        <div className="flex justify-between items-start mb-6">
-            <div>
-                <h3 className="text-2xl font-bold text-slate-800">Camión {size}</h3>
-                <p className="text-slate-500 text-sm">Capacidad estándar</p>
-            </div>
-            <Truck className={`w-10 h-10 ${recommended ? 'text-green-500' : 'text-slate-400'}`} />
-        </div>
-
-        <div className="flex-1 space-y-4">
-             <div className="flex items-center justify-between text-sm border-b border-slate-100 pb-3">
-                <span className="text-slate-500">Capacidad Total</span>
-                <span className="font-semibold text-slate-800">{capacity} Bloques</span>
-             </div>
-             <div className="flex items-center justify-between text-sm border-b border-slate-100 pb-3">
-                <span className="text-slate-500">Tu Carga</span>
-                <span className={`font-semibold ${disabled ? 'text-red-500' : 'text-slate-800'}`}>
-                    {totalBlocks} Bloques
-                </span>
-             </div>
-             <div className="pt-2">
-                <span className="text-3xl font-bold text-slate-800 flex items-center">
-                    <DollarSign className="w-6 h-6 text-slate-400" />
-                    {price}
-                </span>
-                <span className="text-xs text-slate-400">Precio estimado</span>
-             </div>
-        </div>
+  const PricingBreakdown = () => (
+      <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-sm">
+          <div className="flex justify-between text-slate-500">
+              <span>Tarifa Base (Camión {recommendedSize})</span>
+              <span>${currentPricing.base.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-slate-500">
+              <span>Distancia ({distance} km x ${PRICE_PER_KM})</span>
+              <span>${currentPricing.distanceCost.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between font-bold text-slate-800 pt-2 border-t border-slate-200 text-lg">
+              <span>Total Estimado</span>
+              <span>${currentPricing.total.toLocaleString()}</span>
+          </div>
       </div>
-    </div>
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-up">
+    <div className="max-w-2xl mx-auto space-y-8 animate-fade-in-up">
       <div className="text-center space-y-2">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-full mb-4">
             <Truck className="w-8 h-8" />
         </div>
-        <h2 className="text-3xl font-bold text-slate-900">Resultado de tu cálculo</h2>
-        <p className="text-slate-500">Basado en {totalBlocks} bloques de volumen total.</p>
+        <h2 className="text-3xl font-bold text-slate-900">Tu Mudanza Ideal</h2>
+        <div className="flex items-center justify-center gap-2 text-slate-500">
+            <MapPin className="w-4 h-4" />
+            <span>{origin}</span>
+            <ArrowRight className="w-3 h-3" />
+            <span>{destination}</span>
+            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-bold ml-1">{distance} km</span>
+        </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 md:gap-10 items-center justify-center py-8">
-        <TruckCard 
-            size="S" 
-            capacity={TRUCK_CAPACITY.S} 
-            recommended={!recommendM} 
-            disabled={recommendM}
-            price={120}
-        />
-        <TruckCard 
-            size="M" 
-            capacity={TRUCK_CAPACITY.M} 
-            recommended={recommendM} 
-            disabled={false} 
-            price={200}
-        />
-      </div>
-
-      {/* Save / Reserve Action */}
-      <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 max-w-2xl mx-auto">
-         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-blue-500" />
-            Guardar Cotización
-         </h3>
-         <div className="flex flex-col md:flex-row gap-4">
-             <div className="flex-1">
-                <input 
-                    type="text" 
-                    value={route}
-                    onChange={(e) => {
-                        setRoute(e.target.value);
-                        setError('');
-                    }}
-                    placeholder="Ej: Centro -> Condesa"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                />
-                {error && <p className="text-red-500 text-xs mt-1 ml-1">{error}</p>}
+      <div className="bg-white rounded-2xl border-2 border-blue-100 shadow-xl overflow-hidden">
+         {isOverflow ? (
+             <div className="p-12 text-center text-red-600">
+                 <X className="w-16 h-16 mx-auto mb-4" />
+                 <h3 className="text-2xl font-bold mb-2">Carga Excesiva</h3>
+                 <p className="text-slate-600">Tu carga de {totalBlocks} bloques excede nuestro camión más grande (XL - 144 bloques). Por favor contacta soporte para una mudanza industrial.</p>
              </div>
-             <button 
-                onClick={handleSave}
-                className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex items-center justify-center gap-2 whitespace-nowrap"
-            >
-                <Save className="w-4 h-4" />
-                Reservar / Guardar
-             </button>
-         </div>
+         ) : (
+            <>
+                <div className="bg-blue-600 p-6 text-white flex justify-between items-center">
+                    <div>
+                        <h3 className="text-2xl font-bold">Camión {recommendedSize}</h3>
+                        <p className="text-blue-100 text-sm">Recomendado para {totalBlocks} bloques</p>
+                    </div>
+                    <div className="text-right">
+                        <span className="text-3xl font-bold">${currentPricing.total.toLocaleString()}</span>
+                        <p className="text-blue-200 text-xs">Precio final</p>
+                    </div>
+                </div>
+                
+                <div className="p-8 space-y-6">
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-slate-800">Detalle del costo</h4>
+                        <PricingBreakdown />
+                    </div>
+
+                    <div className="flex items-center gap-3 p-4 bg-yellow-50 text-yellow-800 rounded-xl text-sm border border-yellow-100">
+                        <Route className="w-5 h-5 flex-shrink-0" />
+                        <p>El precio incluye chofer y combustible para la ruta seleccionada.</p>
+                    </div>
+
+                    <button 
+                        onClick={handleSave}
+                        className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                    >
+                        <Save className="w-5 h-5" />
+                        Confirmar y Reservar
+                    </button>
+                </div>
+            </>
+         )}
       </div>
 
-      <div className="flex justify-center pt-4">
+      <div className="flex justify-center">
         <button 
             onClick={onBack}
             className="px-6 py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-2"
         >
             <ArrowLeft className="w-4 h-4" />
-            Volver y editar items
+            Volver y editar
         </button>
       </div>
     </div>

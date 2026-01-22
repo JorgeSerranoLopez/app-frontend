@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutGrid, LogOut, User as UserIcon } from 'lucide-react';
+import { LayoutGrid, LogOut } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { LoadAssistant } from './components/LoadAssistant';
 import { Recommendation } from './components/Recommendation';
@@ -14,6 +14,13 @@ function App() {
   // App State
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  
+  // New Quote Data State
+  const [quoteData, setQuoteData] = useState<{
+      origin: string; 
+      destination: string; 
+      distance: number;
+  }>({ origin: '', destination: '', distance: 0 });
 
   // Load users from localStorage on mount
   useEffect(() => {
@@ -28,6 +35,15 @@ function App() {
   const getUsers = (): User[] => {
     const usersStr = localStorage.getItem('mudanza_users');
     return usersStr ? JSON.parse(usersStr) : [];
+  };
+
+  const updateGlobalUsers = (updatedUser: User) => {
+    const users = getUsers();
+    const userIndex = users.findIndex(u => u.id === updatedUser.id);
+    if (userIndex !== -1) {
+        users[userIndex] = updatedUser;
+        localStorage.setItem('mudanza_users', JSON.stringify(users));
+    }
   };
 
   const handleRegister = (name: string, email: string, pass: string) => {
@@ -93,6 +109,7 @@ function App() {
 
   const handleReset = () => {
     setSelectedItems([]);
+    setQuoteData({ origin: '', destination: '', distance: 0 });
   };
 
   const handleStartQuote = () => {
@@ -100,18 +117,19 @@ function App() {
     setCurrentView('assistant');
   };
 
-  const handleFinish = () => {
+  const handleFinishStep1 = (origin: string, destination: string, distance: number) => {
+    setQuoteData({ origin, destination, distance });
     setCurrentView('result');
   };
 
-  const handleSaveQuote = (quoteData: Omit<Quote, 'id' | 'date' | 'status'>) => {
+  const handleSaveQuote = (finalQuoteData: Omit<Quote, 'id' | 'date' | 'status'>) => {
     if (!currentUser) return;
 
     const newQuote: Quote = {
       id: crypto.randomUUID(),
       date: new Date().toLocaleDateString(),
       status: 'Reservado',
-      ...quoteData
+      ...finalQuoteData
     };
 
     // Update Current User State
@@ -121,17 +139,23 @@ function App() {
     };
     setCurrentUser(updatedUser);
     localStorage.setItem('mudanza_current_user', JSON.stringify(updatedUser));
-
-    // Update Global Users List in LocalStorage
-    const users = getUsers();
-    const userIndex = users.findIndex(u => u.id === currentUser.id);
-    if (userIndex !== -1) {
-        users[userIndex] = updatedUser;
-        localStorage.setItem('mudanza_users', JSON.stringify(users));
-    }
+    updateGlobalUsers(updatedUser);
 
     // Go back to dashboard
     setCurrentView('dashboard');
+  };
+
+  const handleDeleteQuote = (id: string) => {
+    if (!currentUser) return;
+    
+    if(!window.confirm("¿Estás seguro de eliminar esta cotización?")) return;
+
+    const updatedHistory = currentUser.history.filter(q => q.id !== id);
+    const updatedUser = { ...currentUser, history: updatedHistory };
+    
+    setCurrentUser(updatedUser);
+    localStorage.setItem('mudanza_current_user', JSON.stringify(updatedUser));
+    updateGlobalUsers(updatedUser);
   };
 
   // --- View Rendering ---
@@ -143,7 +167,7 @@ function App() {
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard user={currentUser} onStartQuote={handleStartQuote} />;
+        return <Dashboard user={currentUser} onStartQuote={handleStartQuote} onDeleteQuote={handleDeleteQuote} />;
       case 'assistant':
         return (
           <LoadAssistant
@@ -151,19 +175,22 @@ function App() {
             onAddItem={handleAddItem}
             onRemoveItem={handleRemoveItem}
             onReset={handleReset}
-            onFinish={handleFinish}
+            onFinish={handleFinishStep1}
           />
         );
       case 'result':
         return (
           <Recommendation
             totalBlocks={totalBlocks}
+            origin={quoteData.origin}
+            destination={quoteData.destination}
+            distance={quoteData.distance}
             onBack={() => setCurrentView('assistant')}
             onSave={handleSaveQuote}
           />
         );
       default:
-        return <Dashboard user={currentUser} onStartQuote={handleStartQuote} />;
+        return <Dashboard user={currentUser} onStartQuote={handleStartQuote} onDeleteQuote={handleDeleteQuote} />;
     }
   };
 
@@ -188,7 +215,7 @@ function App() {
              {/* View Indicator */}
              {currentView !== 'dashboard' && (
                 <div className="hidden md:block text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                    {currentView === 'assistant' ? 'Paso 1: Cubicaje' : 'Paso 2: Recomendación'}
+                    {currentView === 'assistant' ? 'Paso 1: Ruta y Carga' : 'Paso 2: Cotización'}
                 </div>
              )}
 

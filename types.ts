@@ -20,17 +20,39 @@ export const FURNITURE_CATALOG: FurnitureItem[] = [
 ];
 
 export const TRUCK_CAPACITY = {
-  S: 36, // 6x6
-  M: 64, // 8x8
+  S: 36,   // 6x6
+  M: 64,   // 8x8
+  L: 100,  // 10x10
+  XL: 144, // 12x12
 };
+
+export const TRUCK_BASE_PRICES = {
+  S: 45000,
+  M: 85000,
+  L: 130000,
+  XL: 180000,
+};
+
+export const PRICE_PER_KM = 1500;
+
+export const COMUNAS_RM = [
+  "Santiago Centro", "Providencia", "Las Condes", "Ñuñoa", "Vitacura", 
+  "La Reina", "Lo Barnechea", "Macul", "Peñalolén", "La Florida", 
+  "Maipú", "Estación Central", "San Miguel", "San Joaquín", "Independencia",
+  "Recoleta", "Huechuraba", "Quilicura", "Pudahuel", "Puente Alto"
+];
 
 export interface Quote {
   id: string;
   date: string;
-  route: string;
+  origin: string;
+  destination: string;
+  distance: number;
   truck: string;
   blocks: number;
-  price: number;
+  basePrice: number;
+  distancePrice: number;
+  totalPrice: number;
   status: 'Reservado' | 'Completado' | 'Pendiente';
 }
 
