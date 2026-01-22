@@ -4,7 +4,7 @@ export interface FurnitureItem {
   id: string;
   name: string;
   blocks: number; // Unit blocks (50x50cm)
-  icon: 'box' | 'fridge' | 'washer' | 'sofa' | 'bed';
+  icon: 'box' | 'fridge' | 'washer' | 'sofa' | 'bed' | 'nightstand' | 'chair' | 'desk' | 'dining' | 'wardrobe' | 'bike' | 'tv' | 'microwave';
 }
 
 export interface SelectedItem extends FurnitureItem {
@@ -13,10 +13,18 @@ export interface SelectedItem extends FurnitureItem {
 
 export const FURNITURE_CATALOG: FurnitureItem[] = [
   { id: 'box', name: 'Caja Standard', blocks: 1, icon: 'box' },
+  { id: 'nightstand', name: 'Velador', blocks: 1, icon: 'nightstand' },
+  { id: 'microwave', name: 'Horno / Microondas', blocks: 1, icon: 'microwave' },
+  { id: 'chair', name: 'Silla de Oficina', blocks: 2, icon: 'chair' },
   { id: 'fridge', name: 'Refrigerador', blocks: 2, icon: 'fridge' },
   { id: 'washer', name: 'Lavadora', blocks: 3, icon: 'washer' },
+  { id: 'bike', name: 'Bicicleta', blocks: 3, icon: 'bike' },
+  { id: 'tv', name: 'Televisor 65"', blocks: 3, icon: 'tv' },
+  { id: 'desk', name: 'Escritorio', blocks: 4, icon: 'desk' },
   { id: 'sofa', name: 'Sofá 3 Cuerpos', blocks: 6, icon: 'sofa' },
   { id: 'bed', name: 'Cama King', blocks: 8, icon: 'bed' },
+  { id: 'wardrobe', name: 'Ropero / Closet', blocks: 10, icon: 'wardrobe' },
+  { id: 'dining', name: 'Comedor (Mesa + 6 Sillas)', blocks: 12, icon: 'dining' },
 ];
 
 export const TRUCK_CAPACITY = {

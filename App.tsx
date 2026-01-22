@@ -148,12 +148,16 @@ function App() {
   const handleDeleteQuote = (id: string) => {
     if (!currentUser) return;
     
+    // Confirm deletion
     if(!window.confirm("¿Estás seguro de eliminar esta cotización?")) return;
 
+    // Update local state
     const updatedHistory = currentUser.history.filter(q => q.id !== id);
     const updatedUser = { ...currentUser, history: updatedHistory };
     
     setCurrentUser(updatedUser);
+    
+    // Persist to Storage immediately
     localStorage.setItem('mudanza_current_user', JSON.stringify(updatedUser));
     updateGlobalUsers(updatedUser);
   };

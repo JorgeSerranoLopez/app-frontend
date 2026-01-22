@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutGrid, ArrowRight, UserPlus, LogIn } from 'lucide-react';
+import { LayoutGrid, UserPlus, LogIn } from 'lucide-react';
 
 interface Props {
   onLogin: (email: string, pass: string) => void;
