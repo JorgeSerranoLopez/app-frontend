@@ -1,16 +1,34 @@
-import React from 'react';
-import { Truck, Check, X, ArrowLeft, DollarSign } from 'lucide-react';
-import { TRUCK_CAPACITY } from '../types';
+import React, { useState } from 'react';
+import { Truck, Check, X, ArrowLeft, DollarSign, Save, MapPin } from 'lucide-react';
+import { TRUCK_CAPACITY, Quote } from '../types';
 
 interface Props {
   totalBlocks: number;
   onBack: () => void;
-  onRestart: () => void;
+  onSave: (quote: Omit<Quote, 'id' | 'date' | 'status'>) => void;
 }
 
-export const Recommendation: React.FC<Props> = ({ totalBlocks, onBack, onRestart }) => {
+export const Recommendation: React.FC<Props> = ({ totalBlocks, onBack, onSave }) => {
+  const [route, setRoute] = useState('');
+  const [error, setError] = useState('');
+
   // Logic: Recommend M if > 36
   const recommendM = totalBlocks > TRUCK_CAPACITY.S;
+  const recommendedTruck = recommendM ? 'M' : 'S';
+  const estimatedPrice = recommendM ? 200 : 120;
+
+  const handleSave = () => {
+    if (!route.trim()) {
+      setError('Por favor ingresa una ruta o nombre para la cotización.');
+      return;
+    }
+    onSave({
+      route: route,
+      truck: `Camión ${recommendedTruck}`,
+      blocks: totalBlocks,
+      price: estimatedPrice
+    });
+  };
   
   const TruckCard = ({ 
     size, 
@@ -74,13 +92,6 @@ export const Recommendation: React.FC<Props> = ({ totalBlocks, onBack, onRestart
                 <span className="text-xs text-slate-400">Precio estimado</span>
              </div>
         </div>
-
-        {recommended && (
-            <button className="mt-8 w-full py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
-                Seleccionar Camión {size}
-                <Check className="w-5 h-5" />
-            </button>
-        )}
       </div>
     </div>
   );
@@ -96,7 +107,6 @@ export const Recommendation: React.FC<Props> = ({ totalBlocks, onBack, onRestart
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 md:gap-10 items-center justify-center py-8">
-        {/* Truck S Card */}
         <TruckCard 
             size="S" 
             capacity={TRUCK_CAPACITY.S} 
@@ -104,30 +114,52 @@ export const Recommendation: React.FC<Props> = ({ totalBlocks, onBack, onRestart
             disabled={recommendM}
             price={120}
         />
-
-        {/* Truck M Card */}
         <TruckCard 
             size="M" 
             capacity={TRUCK_CAPACITY.M} 
             recommended={recommendM} 
-            disabled={false} // M is always big enough in this specific logic context (assuming max load fits in M)
+            disabled={false} 
             price={200}
         />
       </div>
 
-      <div className="flex justify-center gap-4">
+      {/* Save / Reserve Action */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 max-w-2xl mx-auto">
+         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-blue-500" />
+            Guardar Cotización
+         </h3>
+         <div className="flex flex-col md:flex-row gap-4">
+             <div className="flex-1">
+                <input 
+                    type="text" 
+                    value={route}
+                    onChange={(e) => {
+                        setRoute(e.target.value);
+                        setError('');
+                    }}
+                    placeholder="Ej: Centro -> Condesa"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                />
+                {error && <p className="text-red-500 text-xs mt-1 ml-1">{error}</p>}
+             </div>
+             <button 
+                onClick={handleSave}
+                className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+                <Save className="w-4 h-4" />
+                Reservar / Guardar
+             </button>
+         </div>
+      </div>
+
+      <div className="flex justify-center pt-4">
         <button 
             onClick={onBack}
             className="px-6 py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-2"
         >
             <ArrowLeft className="w-4 h-4" />
-            Editar items
-        </button>
-        <button 
-            onClick={onRestart}
-            className="px-6 py-3 rounded-xl font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
-        >
-            Volver al Dashboard
+            Volver y editar items
         </button>
       </div>
     </div>

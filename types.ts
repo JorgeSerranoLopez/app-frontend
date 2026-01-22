@@ -23,3 +23,21 @@ export const TRUCK_CAPACITY = {
   S: 36, // 6x6
   M: 64, // 8x8
 };
+
+export interface Quote {
+  id: string;
+  date: string;
+  route: string;
+  truck: string;
+  blocks: number;
+  price: number;
+  status: 'Reservado' | 'Completado' | 'Pendiente';
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  history: Quote[];
+}

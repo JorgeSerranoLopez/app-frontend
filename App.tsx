@@ -1,18 +1,84 @@
-import React, { useState } from 'react';
-import { LayoutGrid } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LayoutGrid, LogOut, User as UserIcon } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { LoadAssistant } from './components/LoadAssistant';
 import { Recommendation } from './components/Recommendation';
-import { ViewState, SelectedItem, FurnitureItem } from './types';
+import { Auth } from './components/Auth';
+import { ViewState, SelectedItem, FurnitureItem, User, Quote } from './types';
 
 function App() {
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // App State
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+
+  // Load users from localStorage on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('mudanza_current_user');
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  // --- Auth Handlers ---
+
+  const getUsers = (): User[] => {
+    const usersStr = localStorage.getItem('mudanza_users');
+    return usersStr ? JSON.parse(usersStr) : [];
+  };
+
+  const handleRegister = (name: string, email: string, pass: string) => {
+    const users = getUsers();
+    if (users.find(u => u.email === email)) {
+      setAuthError('El correo ya está registrado');
+      return;
+    }
+
+    const newUser: User = {
+      id: crypto.randomUUID(),
+      name,
+      email,
+      password: pass,
+      history: []
+    };
+
+    const updatedUsers = [...users, newUser];
+    localStorage.setItem('mudanza_users', JSON.stringify(updatedUsers));
+    
+    // Auto login
+    localStorage.setItem('mudanza_current_user', JSON.stringify(newUser));
+    setCurrentUser(newUser);
+    setAuthError(null);
+  };
+
+  const handleLogin = (email: string, pass: string) => {
+    const users = getUsers();
+    const user = users.find(u => u.email === email && u.password === pass);
+    
+    if (user) {
+      localStorage.setItem('mudanza_current_user', JSON.stringify(user));
+      setCurrentUser(user);
+      setAuthError(null);
+    } else {
+      setAuthError('Credenciales inválidas');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('mudanza_current_user');
+    setCurrentUser(null);
+    handleReset();
+    setCurrentView('dashboard');
+  };
+
+  // --- App Handlers ---
 
   // Calculate totals
   const totalBlocks = selectedItems.reduce((acc, item) => acc + item.blocks, 0);
 
-  // Actions
   const handleAddItem = (item: FurnitureItem) => {
     const newItem: SelectedItem = {
       ...item,
@@ -38,15 +104,46 @@ function App() {
     setCurrentView('result');
   };
 
-  const handleGoHome = () => {
+  const handleSaveQuote = (quoteData: Omit<Quote, 'id' | 'date' | 'status'>) => {
+    if (!currentUser) return;
+
+    const newQuote: Quote = {
+      id: crypto.randomUUID(),
+      date: new Date().toLocaleDateString(),
+      status: 'Reservado',
+      ...quoteData
+    };
+
+    // Update Current User State
+    const updatedUser = {
+      ...currentUser,
+      history: [newQuote, ...currentUser.history] // Add to top
+    };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('mudanza_current_user', JSON.stringify(updatedUser));
+
+    // Update Global Users List in LocalStorage
+    const users = getUsers();
+    const userIndex = users.findIndex(u => u.id === currentUser.id);
+    if (userIndex !== -1) {
+        users[userIndex] = updatedUser;
+        localStorage.setItem('mudanza_users', JSON.stringify(users));
+    }
+
+    // Go back to dashboard
     setCurrentView('dashboard');
   };
 
-  // Render View Switcher
+  // --- View Rendering ---
+
+  if (!currentUser) {
+    return <Auth onLogin={handleLogin} onRegister={handleRegister} error={authError} />;
+  }
+
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard onStartQuote={handleStartQuote} />;
+        return <Dashboard user={currentUser} onStartQuote={handleStartQuote} />;
       case 'assistant':
         return (
           <LoadAssistant
@@ -62,18 +159,18 @@ function App() {
           <Recommendation
             totalBlocks={totalBlocks}
             onBack={() => setCurrentView('assistant')}
-            onRestart={handleGoHome}
+            onSave={handleSaveQuote}
           />
         );
       default:
-        return <Dashboard onStartQuote={handleStartQuote} />;
+        return <Dashboard user={currentUser} onStartQuote={handleStartQuote} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
       {/* Top Navigation Bar */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div 
             className="flex items-center gap-2 cursor-pointer" 
@@ -82,16 +179,38 @@ function App() {
             <div className="bg-blue-600 p-1.5 rounded-lg text-white">
               <LayoutGrid className="w-6 h-6" />
             </div>
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-blue-500">
+            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-blue-500 hidden sm:inline-block">
               MudanzaApp
             </span>
           </div>
           
-          {currentView !== 'dashboard' && (
-             <div className="text-sm font-medium text-slate-500">
-                {currentView === 'assistant' ? 'Paso 1: Cubicaje' : 'Paso 2: Resultado'}
+          <div className="flex items-center gap-4">
+             {/* View Indicator */}
+             {currentView !== 'dashboard' && (
+                <div className="hidden md:block text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    {currentView === 'assistant' ? 'Paso 1: Cubicaje' : 'Paso 2: Recomendación'}
+                </div>
+             )}
+
+             {/* User Profile */}
+             <div className="flex items-center gap-4 pl-4 border-l border-slate-100">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                        {currentUser.name.charAt(0)}
+                    </div>
+                    <span className="text-sm font-medium text-slate-700 hidden sm:block">
+                        {currentUser.name}
+                    </span>
+                </div>
+                <button 
+                    onClick={handleLogout}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    title="Cerrar Sesión"
+                >
+                    <LogOut className="w-5 h-5" />
+                </button>
              </div>
-          )}
+          </div>
         </div>
       </nav>
 
