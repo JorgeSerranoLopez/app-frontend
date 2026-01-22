@@ -1,0 +1,5 @@
+{
+  "name": "MudanzaApp",
+  "description": "An interactive moving assistant to estimate truck sizes based on furniture volume using a visual grid system.",
+  "requestFramePermissions": []
+}
