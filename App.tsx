@@ -4,7 +4,17 @@ import { Dashboard } from './components/Dashboard';
 import { LoadAssistant } from './components/LoadAssistant';
 import { Recommendation } from './components/Recommendation';
 import { Auth } from './components/Auth';
-import { ViewState, SelectedItem, FurnitureItem, User, Quote } from './types';
+import { ViewState, SelectedItem, FurnitureItem, User, Quote, TRUCK_DIMENSIONS, TruckSize } from './types';
+
+// Helper to generate a random pastel color for items
+const getRandomColor = () => {
+  const hues = [
+    'bg-red-400', 'bg-orange-400', 'bg-amber-400', 'bg-yellow-400', 'bg-lime-400', 
+    'bg-green-400', 'bg-emerald-400', 'bg-teal-400', 'bg-cyan-400', 'bg-sky-400', 
+    'bg-blue-400', 'bg-indigo-400', 'bg-violet-400', 'bg-purple-400', 'bg-fuchsia-400', 'bg-pink-400', 'bg-rose-400'
+  ];
+  return hues[Math.floor(Math.random() * hues.length)];
+};
 
 function App() {
   // Auth State
@@ -14,6 +24,7 @@ function App() {
   // App State
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  const [currentTruckSize, setCurrentTruckSize] = useState<TruckSize>('S');
   
   // New Quote Data State
   const [quoteData, setQuoteData] = useState<{
@@ -31,7 +42,6 @@ function App() {
   }, []);
 
   // --- Auth Handlers ---
-
   const getUsers = (): User[] => {
     const usersStr = localStorage.getItem('mudanza_users');
     return usersStr ? JSON.parse(usersStr) : [];
@@ -63,8 +73,6 @@ function App() {
 
     const updatedUsers = [...users, newUser];
     localStorage.setItem('mudanza_users', JSON.stringify(updatedUsers));
-    
-    // Auto login
     localStorage.setItem('mudanza_current_user', JSON.stringify(newUser));
     setCurrentUser(newUser);
     setAuthError(null);
@@ -90,25 +98,128 @@ function App() {
     setCurrentView('dashboard');
   };
 
-  // --- App Handlers ---
+  // --- Bin Packing Logic ---
 
-  // Calculate totals
-  const totalBlocks = selectedItems.reduce((acc, item) => acc + item.blocks, 0);
+  // Create an empty 2D grid
+  const createGrid = (size: number): string[][] => {
+    return Array(size).fill(null).map(() => Array(size).fill(''));
+  };
+
+  // Check if a specific shape fits at x, y in the grid
+  const canPlaceItem = (grid: string[][], shape: number[][], startX: number, startY: number, gridSize: number): boolean => {
+    for (let row = 0; row < shape.length; row++) {
+      for (let col = 0; col < shape[row].length; col++) {
+        if (shape[row][col] === 1) {
+          const targetY = startY + row;
+          const targetX = startX + col;
+
+          // Check bounds
+          if (targetY >= gridSize || targetX >= gridSize) return false;
+          
+          // Check overlapping
+          if (grid[targetY][targetX] !== '') return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  // Mark the grid with the item ID
+  const placeItemOnGrid = (grid: string[][], shape: number[][], startX: number, startY: number, id: string) => {
+    for (let row = 0; row < shape.length; row++) {
+      for (let col = 0; col < shape[row].length; col++) {
+        if (shape[row][col] === 1) {
+          grid[startY + row][startX + col] = id;
+        }
+      }
+    }
+  };
+
+  // Try to fit a list of items into a specific truck size
+  const fitItemsInTruck = (items: SelectedItem[], size: TruckSize): { success: boolean; placements: SelectedItem[] } => {
+    const dimension = TRUCK_DIMENSIONS[size];
+    const grid = createGrid(dimension);
+    const placedItems: SelectedItem[] = [];
+
+    for (const item of items) {
+      let placed = false;
+      
+      // Iterate through grid to find first spot
+      for (let y = 0; y < dimension; y++) {
+        if (placed) break;
+        for (let x = 0; x < dimension; x++) {
+          if (canPlaceItem(grid, item.shape, x, y, dimension)) {
+             placeItemOnGrid(grid, item.shape, x, y, item.instanceId);
+             placedItems.push({ ...item, position: { x, y } });
+             placed = true;
+             break;
+          }
+        }
+      }
+
+      if (!placed) {
+        return { success: false, placements: [] };
+      }
+    }
+
+    return { success: true, placements: placedItems };
+  };
 
   const handleAddItem = (item: FurnitureItem) => {
     const newItem: SelectedItem = {
       ...item,
       instanceId: Math.random().toString(36).substr(2, 9),
+      color: getRandomColor()
     };
-    setSelectedItems((prev) => [...prev, newItem]);
+
+    const newProposedList = [...selectedItems, newItem];
+    
+    // Algorithm: Try current size, if fail, try next sizes
+    const sizes: TruckSize[] = ['S', 'M', 'L', 'XL'];
+    let startIndex = sizes.indexOf(currentTruckSize);
+    
+    // Optimistic: Start checking from the current size (or S if empty)
+    if (selectedItems.length === 0) startIndex = 0;
+
+    for (let i = startIndex; i < sizes.length; i++) {
+        const sizeToCheck = sizes[i];
+        const result = fitItemsInTruck(newProposedList, sizeToCheck);
+        
+        if (result.success) {
+            setSelectedItems(result.placements);
+            setCurrentTruckSize(sizeToCheck);
+            return;
+        }
+    }
+
+    // If we reach here, it didn't fit in XL
+    alert("¡No hay espacio suficiente para este mueble ni siquiera en el camión XL! Considera hacer dos mudanzas.");
   };
 
   const handleRemoveItem = (index: number) => {
-    setSelectedItems((prev) => prev.filter((_, i) => i !== index));
+    // When removing, we re-pack everything to optimize space
+    // We start trying from 'S' again to see if we can downsize the truck
+    const remainingItems = selectedItems.filter((_, i) => i !== index);
+    
+    const sizes: TruckSize[] = ['S', 'M', 'L', 'XL'];
+    
+    for (const size of sizes) {
+        const result = fitItemsInTruck(remainingItems, size);
+        if (result.success) {
+            setSelectedItems(result.placements);
+            setCurrentTruckSize(size);
+            return;
+        }
+    }
+    
+    // Should always succeed if empty
+    setSelectedItems([]);
+    setCurrentTruckSize('S');
   };
 
   const handleReset = () => {
     setSelectedItems([]);
+    setCurrentTruckSize('S');
     setQuoteData({ origin: '', destination: '', distance: 0 });
   };
 
@@ -132,32 +243,23 @@ function App() {
       ...finalQuoteData
     };
 
-    // Update Current User State
     const updatedUser = {
       ...currentUser,
-      history: [newQuote, ...currentUser.history] // Add to top
+      history: [newQuote, ...currentUser.history]
     };
     setCurrentUser(updatedUser);
     localStorage.setItem('mudanza_current_user', JSON.stringify(updatedUser));
     updateGlobalUsers(updatedUser);
 
-    // Go back to dashboard
     setCurrentView('dashboard');
   };
 
   const handleDeleteQuote = (id: string) => {
     if (!currentUser) return;
-    
-    // Confirm deletion
     if(!window.confirm("¿Estás seguro de eliminar esta cotización?")) return;
-
-    // Update local state
     const updatedHistory = currentUser.history.filter(q => q.id !== id);
     const updatedUser = { ...currentUser, history: updatedHistory };
-    
     setCurrentUser(updatedUser);
-    
-    // Persist to Storage immediately
     localStorage.setItem('mudanza_current_user', JSON.stringify(updatedUser));
     updateGlobalUsers(updatedUser);
   };
@@ -176,6 +278,7 @@ function App() {
         return (
           <LoadAssistant
             selectedItems={selectedItems}
+            truckSize={currentTruckSize}
             onAddItem={handleAddItem}
             onRemoveItem={handleRemoveItem}
             onReset={handleReset}
@@ -185,7 +288,7 @@ function App() {
       case 'result':
         return (
           <Recommendation
-            totalBlocks={totalBlocks}
+            totalBlocks={selectedItems.reduce((acc, i) => acc + i.blocks, 0)}
             origin={quoteData.origin}
             destination={quoteData.destination}
             distance={quoteData.distance}
@@ -200,7 +303,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
-      {/* Top Navigation Bar */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div 
@@ -216,14 +318,12 @@ function App() {
           </div>
           
           <div className="flex items-center gap-4">
-             {/* View Indicator */}
              {currentView !== 'dashboard' && (
                 <div className="hidden md:block text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
                     {currentView === 'assistant' ? 'Paso 1: Ruta y Carga' : 'Paso 2: Cotización'}
                 </div>
              )}
 
-             {/* User Profile */}
              <div className="flex items-center gap-4 pl-4 border-l border-slate-100">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
@@ -245,7 +345,6 @@ function App() {
         </div>
       </nav>
 
-      {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderView()}
       </main>

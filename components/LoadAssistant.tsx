@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, Trash2, Box, AlertCircle, RotateCcw, MapPin, Navigation } from 'lucide-react';
+import { ArrowRight, Trash2, Box, AlertCircle, RotateCcw, MapPin, Navigation, Truck } from 'lucide-react';
 import { FurnitureIcon } from './ui/FurnitureIcon';
-import { FURNITURE_CATALOG, FurnitureItem, SelectedItem, TRUCK_CAPACITY, COMUNAS_RM } from '../types';
+import { FURNITURE_CATALOG, FurnitureItem, SelectedItem, TRUCK_DIMENSIONS, COMUNAS_RM, TruckSize } from '../types';
 
 interface Props {
   selectedItems: SelectedItem[];
+  truckSize: TruckSize;
   onAddItem: (item: FurnitureItem) => void;
   onRemoveItem: (index: number) => void;
   onReset: () => void;
@@ -13,6 +14,7 @@ interface Props {
 
 export const LoadAssistant: React.FC<Props> = ({ 
   selectedItems, 
+  truckSize,
   onAddItem, 
   onRemoveItem, 
   onReset,
@@ -29,8 +31,6 @@ export const LoadAssistant: React.FC<Props> = ({
       if (origin === destination) {
         setDistance(0);
       } else {
-        // Deterministic pseudo-random distance based on string length to simulate realism
-        // Range: 5km to 45km
         const seed = origin.length + destination.length;
         const calcDistance = 5 + (seed * 7 % 40);
         setDistance(calcDistance);
@@ -40,15 +40,33 @@ export const LoadAssistant: React.FC<Props> = ({
     }
   }, [origin, destination]);
 
-  const totalBlocks = selectedItems.reduce((acc, item) => acc + item.blocks, 0);
-  const maxCapacity = TRUCK_CAPACITY.XL; // 144 blocks
-  const isOverCapacity = totalBlocks > maxCapacity;
+  const gridSize = TRUCK_DIMENSIONS[truckSize];
   
-  // Grid visualization (12x12 = 144 blocks for Max Capacity)
-  const gridCells = Array.from({ length: maxCapacity });
-  
-  // Progress percentage relative to MAX capacity
-  const percentage = Math.min((totalBlocks / maxCapacity) * 100, 100);
+  // Construct the visualization grid
+  // We create a flat array representing the grid cells to map over
+  const renderGrid = () => {
+    const grid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(null));
+    
+    // Fill grid with items
+    selectedItems.forEach(item => {
+        if (item.position) {
+            const { x, y } = item.position;
+            item.shape.forEach((row, rIndex) => {
+                row.forEach((cell, cIndex) => {
+                    if (cell === 1) {
+                        if (grid[y + rIndex] && grid[y + rIndex][x + cIndex] !== undefined) {
+                            grid[y + rIndex][x + cIndex] = item;
+                        }
+                    }
+                });
+            });
+        }
+    });
+
+    return grid;
+  };
+
+  const gridData = renderGrid();
 
   const handleAddItemClick = (item: FurnitureItem) => {
     if (!origin || !destination) {
@@ -64,6 +82,12 @@ export const LoadAssistant: React.FC<Props> = ({
 
   const handleFinishClick = () => {
       onFinish(origin, destination, distance);
+  };
+
+  // Helper to determine cell styling
+  const getCellStyles = (item: SelectedItem | null) => {
+      if (!item) return "bg-slate-50/50 border-slate-100";
+      return `${item.color} border-black/10 shadow-sm z-10`;
   };
 
   return (
@@ -145,7 +169,16 @@ export const LoadAssistant: React.FC<Props> = ({
                     </div>
                     <div className="text-left">
                         <span className="block font-semibold text-slate-700 text-sm">{item.name}</span>
-                        <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{item.blocks} Bloques</span>
+                        {/* Visual representation of shape (mini grid) */}
+                        <div className="flex flex-col gap-[1px] mt-1">
+                            {item.shape.map((row, i) => (
+                                <div key={i} className="flex gap-[1px]">
+                                    {row.map((cell, j) => (
+                                        <div key={j} className={`w-1.5 h-1.5 rounded-[1px] ${cell ? 'bg-slate-400' : 'bg-transparent'}`}></div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
@@ -164,98 +197,65 @@ export const LoadAssistant: React.FC<Props> = ({
       {/* CENTER/RIGHT PANEL: Visualization */}
       <div className="lg:col-span-8 flex flex-col gap-4 h-full min-h-0">
         
-        {/* Progress Bar */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex-shrink-0">
-          <div className="flex justify-between items-end mb-3">
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ocupación del Camión</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className={`text-3xl font-bold tabular-nums tracking-tight ${isOverCapacity ? 'text-red-500' : 'text-slate-800'}`}>
-                  {totalBlocks}
-                </span>
-                <span className="text-slate-400 font-medium text-sm">/ {maxCapacity} Bloques (Max XL)</span>
-              </div>
+        {/* Info Bar */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex-shrink-0 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
+                    <Truck className="w-6 h-6" />
+                </div>
+                <div>
+                    <h2 className="text-lg font-bold text-slate-800">Camión Actual: {truckSize}</h2>
+                    <p className="text-slate-500 text-sm">{gridSize}x{gridSize} Bloques</p>
+                </div>
             </div>
-            {isOverCapacity && (
-              <div className="flex items-center gap-1.5 text-red-600 bg-red-50 px-3 py-1.5 rounded-full text-xs font-bold border border-red-100 animate-pulse">
-                <AlertCircle className="w-3.5 h-3.5" />
-                EXCEDE CAPACIDAD
-              </div>
-            )}
-          </div>
-          
-          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
-            <div 
-              className={`h-full transition-all duration-500 ease-out shadow-sm ${
-                isOverCapacity ? 'bg-gradient-to-r from-red-500 to-red-400' : 'bg-gradient-to-r from-blue-500 to-cyan-400'
-              }`}
-              style={{ width: `${percentage}%` }}
-            ></div>
-          </div>
+            
+            <div className="flex gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <span className={`px-2 py-1 rounded ${truckSize === 'S' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>S</span>
+                <span className={`px-2 py-1 rounded ${truckSize === 'M' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>M</span>
+                <span className={`px-2 py-1 rounded ${truckSize === 'L' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>L</span>
+                <span className={`px-2 py-1 rounded ${truckSize === 'XL' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>XL</span>
+            </div>
         </div>
 
         {/* The Grid Visualization */}
         <div className="flex-1 bg-slate-50/50 rounded-2xl border border-slate-200 p-4 md:p-8 flex flex-col items-center justify-center relative overflow-hidden min-h-0">
             <div className="absolute top-4 left-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded backdrop-blur-sm">
-                Vista Planta (12x12)
+                Vista Planta
             </div>
 
-            {/* Grid Container - RESPONSIVE FIXES HERE */}
-            <div className="relative w-full max-w-lg aspect-square">
-                 {/* Guides Layer */}
-                 <div className="absolute inset-0 z-0 pointer-events-none p-1">
-                    {/* Truck S (6x6 - 36 blocks) - Top Left 50% */}
-                    <div className="absolute top-1 left-1 w-[calc(50%-0.5rem)] h-[calc(50%-0.5rem)] border-r-2 border-b-2 border-dashed border-blue-300/50 rounded-br-lg z-10">
-                        <span className="absolute bottom-2 right-2 text-[10px] font-bold text-blue-400 bg-blue-50 px-1.5 py-0.5 rounded">S</span>
-                    </div>
-                     {/* Truck M (8x8 - 64 blocks) - Top Left 66.6% */}
-                    <div className="absolute top-1 left-1 w-[calc(66.66%-0.5rem)] h-[calc(66.66%-0.5rem)] border-r-2 border-b-2 border-dashed border-indigo-300/50 rounded-br-lg z-0">
-                        <span className="absolute bottom-2 right-2 text-[10px] font-bold text-indigo-400 bg-indigo-50 px-1.5 py-0.5 rounded">M</span>
-                    </div>
-                     {/* Truck L (10x10 - 100 blocks) - Top Left 83.3% */}
-                    <div className="absolute top-1 left-1 w-[calc(83.33%-0.5rem)] h-[calc(83.33%-0.5rem)] border-r-2 border-b-2 border-dashed border-purple-300/50 rounded-br-lg -z-10">
-                        <span className="absolute bottom-2 right-2 text-[10px] font-bold text-purple-400 bg-purple-50 px-1.5 py-0.5 rounded">L</span>
-                    </div>
+            {/* Grid Container */}
+            <div className="relative w-full max-w-lg aspect-square bg-white shadow-2xl rounded-xl border border-slate-200/60 p-2 sm:p-4 overflow-hidden">
+                 
+                 {/* Dynamic Grid */}
+                 <div 
+                    className="grid gap-1 w-full h-full"
+                    style={{ 
+                        gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
+                        gridTemplateRows: `repeat(${gridSize}, minmax(0, 1fr))` 
+                    }}
+                 >
+                    {gridData.map((row, rowIndex) => (
+                        row.map((cellItem: SelectedItem | null, colIndex) => (
+                             <div 
+                                key={`${rowIndex}-${colIndex}`}
+                                className={`
+                                    rounded-[2px] sm:rounded-sm border border-opacity-20 transition-all duration-300
+                                    ${getCellStyles(cellItem)}
+                                `}
+                            >
+                                {cellItem && (
+                                    // Optional: Small icon or indicator inside the block if it's the "main" block of the item (top-left) could go here
+                                    // For now, color is enough
+                                    <div className="w-full h-full"></div>
+                                )}
+                            </div>
+                        ))
+                    ))}
                  </div>
-
-                {/* Cells Grid */}
-                <div className="grid grid-cols-12 gap-1 w-full h-full p-1 bg-white shadow-2xl rounded-xl border border-slate-200/60 backdrop-blur-sm z-10 relative">
-                    {gridCells.map((_, i) => {
-                        const isFilled = i < totalBlocks;
-                        const isOverflowState = totalBlocks > maxCapacity;
-                        
-                        // 3D Block Styling Logic
-                        let baseClasses = "aspect-square rounded-[2px] sm:rounded-sm transition-all duration-300 ease-out transform";
-                        let stateClasses = "";
-
-                        if (isFilled) {
-                            if (isOverflowState) {
-                                // Red / Overflow - 3D Effect
-                                stateClasses = "bg-gradient-to-br from-red-400 via-red-500 to-red-600 border-t border-l border-red-300 shadow-sm scale-95 z-20";
-                            } else {
-                                // Green / Normal - 3D Effect with subtle lift
-                                stateClasses = "bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-600 border-t border-l border-emerald-300 shadow-[1px_1px_2px_rgba(0,0,0,0.1)] scale-100 z-20";
-                            }
-                        } else {
-                            // Empty - Subtle placeholder
-                            stateClasses = "bg-slate-50 border border-slate-100/50 scale-90 opacity-50";
-                        }
-
-                        return (
-                            <div 
-                                key={i}
-                                className={`${baseClasses} ${stateClasses}`}
-                            ></div>
-                        );
-                    })}
-                </div>
             </div>
             
-            <div className="mt-6 flex flex-wrap justify-center gap-3 sm:gap-6 text-[10px] sm:text-xs font-medium text-slate-500 uppercase tracking-wide">
-                <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-blue-400"></div> Camión S</span>
-                <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-indigo-400"></div> Camión M</span>
-                <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-purple-400"></div> Camión L</span>
-                <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-white border border-slate-300 shadow-sm"></div> Camión XL</span>
+            <div className="mt-6 text-center text-slate-400 text-xs">
+                Los muebles se organizan automáticamente para optimizar el espacio (Bin Packing).
             </div>
         </div>
 
@@ -276,7 +276,7 @@ export const LoadAssistant: React.FC<Props> = ({
                         className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors px-3 py-2 rounded-lg hover:bg-slate-50 text-sm font-medium"
                     >
                         <RotateCcw className="w-4 h-4" />
-                         <span className="hidden sm:inline">Deshacer</span>
+                         <span className="hidden sm:inline">Deshacer Último</span>
                     </button>
                 )}
             </div>
