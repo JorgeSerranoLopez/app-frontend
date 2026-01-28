@@ -1,4 +1,4 @@
-export type ViewState = 'dashboard' | 'assistant' | 'result';
+export type ViewState = 'dashboard' | 'assistant' | 'result' | 'uploads';
 
 export type TruckSize = 'S' | 'M' | 'L' | 'XL';
 

@@ -17,6 +17,17 @@ export const Auth: React.FC<Props> = ({ onLogin, onRegister, error }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const isStrong =
+      typeof password === 'string' &&
+      password.length >= 8 &&
+      /[A-Z]/.test(password) &&
+      /[a-z]/.test(password) &&
+      /[0-9]/.test(password) &&
+      /[^A-Za-z0-9]/.test(password);
+    if (isRegistering && !isStrong) {
+      alert('La contraseña debe tener mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.');
+      return;
+    }
     if (isRegistering) {
       onRegister(name, email, password);
     } else {
