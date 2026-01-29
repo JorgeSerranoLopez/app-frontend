@@ -8,6 +8,10 @@
     mimetype: string;
     size: number;
     created_at: string;
+    ai_status?: string | null;
+    ai_tags?: any;
+    ai_summary?: string | null;
+    ai_flags?: any;
   }
 
   interface Props {
@@ -27,7 +31,32 @@
         const res = await apiFetch(`${apiBase}/uploads`);
         if (res.ok) {
           const data = await res.json();
-          setItems(data);
+          const normalized = Array.isArray(data)
+            ? data.map((d: any) => ({
+                ...d,
+                ai_tags:
+                  typeof d?.ai_tags === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(d.ai_tags);
+                        } catch {
+                          return [];
+                        }
+                      })()
+                    : d?.ai_tags || [],
+                ai_flags:
+                  typeof d?.ai_flags === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(d.ai_flags);
+                        } catch {
+                          return {};
+                        }
+                      })()
+                    : d?.ai_flags || {},
+              }))
+            : [];
+          setItems(normalized);
         }
       } catch {}
     };
@@ -96,6 +125,18 @@
         setBusy(false);
       }
     };
+    const handleReanalyze = async (id: number) => {
+      try {
+        const res = await apiFetch(`${apiBase}/uploads/${id}/reanalyze`, { method: 'POST' });
+        if (res.ok) {
+          await loadList();
+        } else {
+          alert('Error al reanalizar');
+        }
+      } catch {
+        alert('Error de red al reanalizar');
+      }
+    };
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -134,10 +175,34 @@
                       <div className="font-medium text-slate-800">{it.title || it.original_name}</div>
                       <div className="text-xs text-slate-500">{it.mimetype} · {(it.size / 1024).toFixed(1)} KB · {new Date(it.created_at).toLocaleString()}</div>
                       {it.note && <div className="text-sm text-slate-700 mt-1">{it.note}</div>}
+                      <div className="mt-2 text-xs">
+                        <div className="text-slate-500">IA: {it.ai_status || 'none'}</div>
+                        {Array.isArray(it.ai_tags) && it.ai_tags.length > 0 && (
+                          <div className="text-slate-700">Tags: {it.ai_tags.join(', ')}</div>
+                        )}
+                        {it.ai_summary && (
+                          <div className="text-slate-700">Resumen: {it.ai_summary}</div>
+                        )}
+                        {it.ai_flags && Array.isArray((it.ai_flags as any).inventory_items) && (it.ai_flags as any).inventory_items.length > 0 && (
+                          <div className="text-slate-700 mt-1">
+                            <div className="font-semibold">Inventario detectado:</div>
+                            <ul className="list-disc ml-5">
+                              {((it.ai_flags as any).inventory_items as Array<{ name: string; quantity: number }>).map((itx, idx) => (
+                                <li key={idx}>{itx.name} — {itx.quantity}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <button onClick={() => handleDownload(it)} className="text-blue-600 font-semibold hover:underline">
-                      Descargar
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <button onClick={() => handleDownload(it)} className="text-blue-600 font-semibold hover:underline">
+                        Descargar
+                      </button>
+                      <button onClick={() => handleReanalyze(it.id)} className="text-slate-600 font-semibold hover:underline">
+                        Reanalizar
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

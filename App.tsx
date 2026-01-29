@@ -18,7 +18,7 @@
   };
 
   function App() {
-    const API_BASE = (import.meta as any).env?.VITE_API_BASE || `http://${window.location.hostname}:3000`;
+    const API_BASE = localStorage.getItem('mudanza_api_base') || (import.meta as any).env?.VITE_API_BASE || `http://${window.location.hostname}:3000`;
     const apiFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const token = localStorage.getItem('mudanza_token') || '';
       const headers = new Headers(init?.headers || {});
