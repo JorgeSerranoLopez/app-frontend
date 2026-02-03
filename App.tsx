@@ -5,6 +5,8 @@
   import { Recommendation } from './components/Recommendation';
   import { Auth } from './components/Auth';
   import { Uploads } from './components/Uploads';
+import { TrucksAdmin } from './components/TrucksAdmin';
+import { AdminPanel } from './components/AdminPanel';
   import { ViewState, SelectedItem, FurnitureItem, User, Quote, TRUCK_DIMENSIONS, TruckSize } from './types';
 
   // Helper to generate a random pastel color for items
@@ -18,7 +20,38 @@
   };
 
   function App() {
-    const API_BASE = localStorage.getItem('mudanza_api_base') || (import.meta as any).env?.VITE_API_BASE || `http://${window.location.hostname}:3000`;
+    const qs = new URLSearchParams(window.location.search);
+    const qp = qs.get('api');
+    if (qp) {
+      try {
+        localStorage.setItem('mudanza_api_base', qp);
+      } catch {}
+    }
+    const lsBase = localStorage.getItem('mudanza_api_base') || '';
+    const envBase = (import.meta as any).env?.VITE_API_BASE || '';
+    const SHOW_API = String((import.meta as any).env?.VITE_SHOW_API || '').toLowerCase() === 'true';
+    const API_BASE = lsBase || envBase || 'http://localhost:3000';
+    const setApiLocal = () => {
+      try {
+        localStorage.setItem('mudanza_api_base', 'http://localhost:3000');
+      } catch {}
+      window.location.href = '/?';
+    };
+    const [apiEditOpen, setApiEditOpen] = useState(false);
+    const [apiEditValue, setApiEditValue] = useState(API_BASE);
+    const setApiCustom = () => {
+      setApiEditOpen(true);
+      setApiEditValue(API_BASE);
+    };
+    const applyApiCustom = () => {
+      try {
+        localStorage.setItem('mudanza_api_base', apiEditValue || '');
+      } catch {}
+      window.location.href = '/?';
+    };
+    const cancelApiCustom = () => {
+      setApiEditOpen(false);
+    };
     const apiFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const token = localStorage.getItem('mudanza_token') || '';
       const headers = new Headers(init?.headers || {});
@@ -48,6 +81,8 @@
     const [currentView, setCurrentView] = useState<ViewState>('dashboard');
     const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
     const [currentTruckSize, setCurrentTruckSize] = useState<TruckSize>('S');
+    const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+    const [adminQuoteId, setAdminQuoteId] = useState<number | null>(null);
     
     // New Quote Data State
     const [quoteData, setQuoteData] = useState<{
@@ -71,7 +106,7 @@
         const token = localStorage.getItem('mudanza_token') || '';
         if (!token) return;
         try {
-          const qRes = await fetch(`${API_BASE}/quotes`, { headers: { Authorization: `Bearer ${token}` } });
+          const qRes = await apiFetch(`${API_BASE}/quotes`, { headers: { Authorization: `Bearer ${token}` } });
           if (qRes.ok) {
             const rows = await qRes.json();
             const mapped = rows.map((r: any) => {
@@ -131,6 +166,10 @@
         setAuthError('La contraseña debe tener mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.');
         return;
       }
+      if (!API_BASE) {
+        setAuthError('Configura el backend con ?api=<URL_DEL_BACKEND> y recarga.');
+        return;
+      }
       try {
         const res = await fetch(`${API_BASE}/auth/register`, {
           method: 'POST',
@@ -160,7 +199,7 @@
           return;
         }
         const profile = await profileRes.json();
-        const user: User = { id: String(profile.id), name: profile.name || '', email: profile.email, password: '', history: [] };
+        const user: User = { id: String(profile.id), name: profile.name || '', email: profile.email, password: '', role: profile.role, history: [] };
         localStorage.setItem('mudanza_current_user', JSON.stringify(user));
         setCurrentUser(user);
       } catch {
@@ -170,6 +209,10 @@
 
     const handleLogin = async (email: string, pass: string) => {
       setAuthError(null);
+      if (!API_BASE) {
+        setAuthError('Configura el backend con ?api=<URL_DEL_BACKEND> y recarga.');
+        return;
+      }
       try {
         const res = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
@@ -190,7 +233,7 @@
           return;
         }
         const profile = await profileRes.json();
-        const user: User = { id: String(profile.id), name: profile.name || '', email: profile.email, password: '', history: [] };
+        const user: User = { id: String(profile.id), name: profile.name || '', email: profile.email, password: '', role: profile.role, history: [] };
         localStorage.setItem('mudanza_current_user', JSON.stringify(user));
         // Fetch quotes from backend and map to frontend history
         try {
@@ -375,13 +418,21 @@
     const handleGoUploads = () => {
       setCurrentView('uploads');
     };
+    const handleViewQuoteFromUpload = (qid: number) => {
+      setAdminQuoteId(qid);
+      setCurrentView('admin');
+    };
 
     const handleFinishStep1 = (origin: string, destination: string, distance: number) => {
       setQuoteData({ origin, destination, distance });
       setCurrentView('result');
     };
 
-    const handleSaveQuote = async (finalQuoteData: Omit<Quote, 'id' | 'date' | 'status'>) => {
+    const handleSaveQuote = async (
+      finalQuoteData:
+        | { origin: string; destination: string; distance: number }
+        | Omit<Quote, 'id' | 'date' | 'status'>
+    ) => {
       if (!currentUser) return;
       try {
         const loads = selectedItems.map(i => ({ description: i.name, blocks: i.blocks }));
@@ -496,7 +547,30 @@
               apiBase={API_BASE}
               apiFetch={apiFetch}
               onBack={() => setCurrentView('dashboard')}
+              onViewQuote={handleViewQuoteFromUpload}
             />
+          );
+ 
+        case 'trucks':
+          return (
+            <TrucksAdmin
+              apiBase={API_BASE}
+              apiFetch={apiFetch}
+              isAdmin={currentUser.role === 'admin'}
+              onBack={() => setCurrentView('dashboard')}
+            />
+          );
+        case 'admin':
+          return currentUser.role === 'admin' ? (
+            <AdminPanel
+              apiBase={API_BASE}
+              apiFetch={apiFetch}
+              onBack={() => setCurrentView('dashboard')}
+              initialSection={adminQuoteId ? 'quotes' : undefined}
+              initialQuoteId={adminQuoteId}
+            />
+          ) : (
+            <Dashboard user={currentUser} onStartQuote={handleStartQuote} onDeleteQuote={handleDeleteQuote} onGoUploads={handleGoUploads} />
           );
         default:
           return <Dashboard user={currentUser} onStartQuote={handleStartQuote} onDeleteQuote={handleDeleteQuote} onGoUploads={handleGoUploads} />;
@@ -527,6 +601,49 @@
               )}
 
               <div className="flex items-center gap-4 pl-4 border-l border-slate-100">
+                  <div className="hidden md:flex items-center gap-2 pr-2 border-r border-slate-100">
+                  {SHOW_API && (
+                    <div className="hidden md:flex items-center gap-2 pr-2 border-r border-slate-100">
+                      <span className="text-xs text-slate-500">API:</span>
+                      <span className="text-xs font-semibold text-slate-700">{(() => { try { return new URL(API_BASE).host; } catch { return API_BASE; } })()}</span>
+                      {!apiEditOpen ? (
+                        <>
+                          <button onClick={setApiLocal} className="text-xs text-blue-600 hover:text-blue-800">Usar localhost</button>
+                          <button onClick={setApiCustom} className="text-xs text-slate-600 hover:text-slate-800">Cambiar…</button>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <input
+                            className="text-xs border rounded px-2 py-1"
+                            placeholder="URL del backend"
+                            value={apiEditValue}
+                            onChange={e => setApiEditValue(e.target.value)}
+                          />
+                          <button onClick={applyApiCustom} className="text-xs text-blue-600 hover:text-blue-800">Guardar</button>
+                          <button onClick={cancelApiCustom} className="text-xs text-slate-600 hover:text-slate-800">Cancelar</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  </div>
+                  
+ 
+                  {currentUser.role === 'admin' && (
+                    <>
+                      <button
+                        onClick={() => setCurrentView('trucks')}
+                        className="text-sm font-medium text-slate-600 hover:text-blue-700"
+                      >
+                        Camiones
+                      </button>
+                      <button
+                        onClick={() => setCurrentView('admin')}
+                        className="text-sm font-medium text-slate-600 hover:text-blue-700"
+                      >
+                        Admin
+                      </button>
+                    </>
+                  )}
                   <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
                           {currentUser.name.charAt(0)}

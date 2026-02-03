@@ -1,4 +1,5 @@
   import React, { useEffect, useState } from 'react';
+  import { COMUNAS_RM } from '../types';
 
   interface UploadItem {
     id: number;
@@ -18,14 +19,27 @@
     apiBase: string;
     apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
     onBack: () => void;
+    onViewQuote?: (quoteId: number) => void;
   }
 
-  export const Uploads: React.FC<Props> = ({ apiBase, apiFetch, onBack }) => {
+  export const Uploads: React.FC<Props> = ({ apiBase, apiFetch, onBack, onViewQuote }) => {
     const [files, setFiles] = useState<FileList | null>(null);
     const [title, setTitle] = useState('');
     const [note, setNote] = useState('');
     const [items, setItems] = useState<UploadItem[]>([]);
     const [busy, setBusy] = useState(false);
+    const [createdQuotes, setCreatedQuotes] = useState<Record<number, number>>({});
+    const [routeByUpload, setRouteByUpload] = useState<Record<number, { origin: string; destination: string; distance: number }>>({});
+    const calcDistance = (origin: string, destination: string) => {
+      if (!origin || !destination) return 0;
+      if (origin === destination) return 0;
+      const seed = origin.length + destination.length;
+      return 5 + ((seed * 7) % 40);
+    };
+    const setRoute = (id: number, origin: string, destination: string) => {
+      const distance = calcDistance(origin, destination);
+      setRouteByUpload(prev => ({ ...prev, [id]: { origin, destination, distance } }));
+    };
     const loadList = async () => {
       try {
         const res = await apiFetch(`${apiBase}/uploads`);
@@ -137,6 +151,38 @@
         alert('Error de red al reanalizar');
       }
     };
+    const handleCreateQuote = async (id: number) => {
+      try {
+        const route = routeByUpload[id] || { origin: '', destination: '', distance: 0 };
+        const res = await apiFetch(`${apiBase}/uploads/${id}/quote`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            origin: route.origin || null,
+            destination: route.destination || null,
+            distance: route.distance || null
+          })
+        });
+        if (!res.ok) {
+          let msg = 'Error al crear cotización';
+          try {
+            const j = await res.json();
+            if (j?.error) msg = j.error;
+          } catch {}
+          alert(msg);
+          return;
+        }
+        const j = await res.json();
+        const t = j?.recommended_truck_type ? `Camión recomendado: ${j.recommended_truck_type}` : 'Sin recomendación';
+        alert(`Cotización creada (ID ${j.quote_id}). ${t}. Total UC: ${j.total_blocks}`);
+        if (j?.quote_id) {
+          setCreatedQuotes((prev) => ({ ...prev, [id]: j.quote_id }));
+          if (onViewQuote) onViewQuote(j.quote_id);
+        }
+      } catch {
+        alert('Error de red al crear cotización');
+      }
+    };
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -202,6 +248,43 @@
                       <button onClick={() => handleReanalyze(it.id)} className="text-slate-600 font-semibold hover:underline">
                         Reanalizar
                       </button>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={routeByUpload[it.id]?.origin || ''}
+                          onChange={e => setRoute(it.id, e.target.value, routeByUpload[it.id]?.destination || '')}
+                          className="text-xs border rounded px-2 py-1"
+                          aria-label="Desde"
+                        >
+                          <option value="">Desde</option>
+                          {COMUNAS_RM.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <select
+                          value={routeByUpload[it.id]?.destination || ''}
+                          onChange={e => setRoute(it.id, routeByUpload[it.id]?.origin || '', e.target.value)}
+                          className="text-xs border rounded px-2 py-1"
+                          aria-label="Hasta"
+                        >
+                          <option value="">Hasta</option>
+                          {COMUNAS_RM.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <span className="text-xs text-slate-500">
+                          {routeByUpload[it.id]?.distance ? `${routeByUpload[it.id]?.distance} km` : ''}
+                        </span>
+                      </div>
+                      <button onClick={() => handleCreateQuote(it.id)} className="text-green-600 font-semibold hover:underline">
+                        Crear Cotización
+                      </button>
+                      {createdQuotes[it.id] && (
+                        <button
+                          onClick={() => {
+                            const qid = createdQuotes[it.id];
+                            if (qid && onViewQuote) onViewQuote(qid);
+                          }}
+                          className="text-blue-700 font-semibold hover:underline"
+                        >
+                          Ver Cotización
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
