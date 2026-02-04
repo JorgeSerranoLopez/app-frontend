@@ -1,234 +1,186 @@
-    import React, { useEffect, useState } from 'react';
 
-    interface QuoteRow {
-    id: number;
-    user_id: number;
-    customer_name: string;
-    truck_id: number | null;
-    origin: string | null;
-    destination: string | null;
-    distance: number | null;
-    total_blocks: number | null;
-    status: string;
-    created_at: string;
+import React from 'react';
+import { Quote } from '../../types';
+import { Search, Filter, MoreHorizontal, MapPin, ArrowRight, Calendar, User, Eye, CheckCircle2, Truck, X } from 'lucide-react';
+
+interface Props {
+  quotes: Quote[];
+  onUpdateStatus: (id: string, status: Quote['status']) => void;
+  onSearch: (term: string) => void;
+  onView: (id: string) => void;
+  detail?: any | null;
+  onCloseDetail?: () => void;
+}
+
+export const AdminQuotes: React.FC<Props> = ({ quotes, onUpdateStatus, onSearch, onView, detail, onCloseDetail }) => {
+  const [menuId, setMenuId] = React.useState<string | null>(null);
+  const getStatusStyle = (status: Quote['status']) => {
+    switch (status) {
+      case 'Completado': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+      case 'Reservado': return 'bg-blue-50 text-blue-700 border-blue-100';
+      case 'Pendiente': return 'bg-amber-50 text-amber-700 border-amber-100';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
+  };
 
-    interface Props {
-    apiBase: string;
-    apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-    initialQuoteId?: number | null;
-    }
-
-    export const AdminQuotes: React.FC<Props> = ({ apiBase, apiFetch, initialQuoteId }) => {
-    const [items, setItems] = useState<QuoteRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [detail, setDetail] = useState<any | null>(null);
-    const [editStatus, setEditStatus] = useState<string>('');
-  const [q, setQ] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [userIdFilter, setUserIdFilter] = useState<string>('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [total, setTotal] = useState<number | null>(null);
-
-    const loadList = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('pageSize', String(pageSize));
-      if (q) params.set('q', q);
-      if (statusFilter) params.set('status', statusFilter);
-      if (userIdFilter) params.set('user_id', userIdFilter);
-      const res = await apiFetch(`${apiBase}/admin/quotes?${params.toString()}`);
-        if (!res.ok) throw new Error('Error al listar cotizaciones');
-        const data = await res.json();
-      const rows = Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [];
-        setItems(rows);
-      if (data && typeof data.total !== 'undefined') {
-        const t = parseInt(String(data.total), 10);
-        setTotal(Number.isNaN(t) ? null : t);
-      } else {
-        setTotal(null);
-      }
-        } catch (e) {
-        setError(e instanceof Error ? e.message : 'Error desconocido');
-        } finally {
-        setLoading(false);
-        }
-    };
-
-    const openDetail = async (id: number) => {
-        setError(null);
-        try {
-        const res = await apiFetch(`${apiBase}/quotes/${id}`);
-        if (!res.ok) throw new Error('Error al obtener detalle');
-        const j = await res.json();
-        setDetail(j);
-        setEditStatus(j.status || '');
-        } catch (e) {
-        setError(e instanceof Error ? e.message : 'Error desconocido');
-        }
-    };
-
-    const saveStatus = async () => {
-        if (!detail?.id) return;
-        setError(null);
-        try {
-        const res = await apiFetch(`${apiBase}/quotes/${detail.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: editStatus, customer_name: detail.customer_name }),
-        });
-        if (!res.ok) throw new Error('Error al actualizar estado');
-        await openDetail(detail.id);
-        await loadList();
-        } catch (e) {
-        setError(e instanceof Error ? e.message : 'Error desconocido');
-        }
-    };
-
-    const removeQuote = async (id: number) => {
-        if (!window.confirm('¿Eliminar cotización?')) return;
-        setError(null);
-        try {
-        const res = await apiFetch(`${apiBase}/quotes/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Error al eliminar cotización');
-        await loadList();
-        } catch (e) {
-        alert(e instanceof Error ? e.message : 'Error desconocido');
-        }
-    };
-
-  useEffect(() => {
-    loadList();
-  }, [apiBase, page, pageSize, q, statusFilter, userIdFilter]);
-
-  useEffect(() => {
-    if (initialQuoteId && !detail) {
-      openDetail(initialQuoteId);
-    }
-  }, [initialQuoteId]);
-
-    if (loading) return <div>Cargando cotizaciones...</div>;
-    if (error) return <div className="text-red-600">{error}</div>;
-
-    return (
-        <div className="space-y-4">
-      <div className="bg-white p-4 rounded-xl border border-slate-200">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <input className="border rounded px-2 py-1" placeholder="Buscar…" value={q} onChange={e => { setQ(e.target.value); setPage(1); }} />
-          <select className="border rounded px-2 py-1" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-            <option value="">Todos los estados</option>
-            <option value="Reservado">Reservado</option>
-            <option value="En Proceso">En Proceso</option>
-            <option value="Completado">Completado</option>
-            <option value="Cancelado">Cancelado</option>
-          </select>
-          <input className="border rounded px-2 py-1" placeholder="Filtrar por user_id" value={userIdFilter} onChange={e => { setUserIdFilter(e.target.value); setPage(1); }} />
-          <select className="border rounded px-2 py-1" value={pageSize} onChange={e => { setPageSize(parseInt(e.target.value, 10)); setPage(1); }}>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-          <button onClick={() => { setQ(''); setStatusFilter(''); setUserIdFilter(''); setPage(1); }} className="border rounded px-3 py-1">
-            Limpiar
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Gestión Operativa</h2>
+          <p className="text-slate-500 font-medium">Monitorea y despacha las cotizaciones activas en el sistema.</p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative group">
+            <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Buscar por cliente o ID..." 
+              className="pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all w-full lg:w-72"
+              onChange={(e) => onSearch(e.target.value)}
+            />
+          </div>
+          <button className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white border-2 border-slate-100 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:border-blue-200 hover:bg-blue-50 transition-all">
+            <Filter className="w-4 h-4" />
+            Filtrar
           </button>
         </div>
       </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full">
-            <thead className="bg-slate-50">
-                <tr>
-                <th className="text-left px-4 py-2">ID</th>
-                <th className="text-left px-4 py-2">Usuario</th>
-                <th className="text-left px-4 py-2">Cliente</th>
-                <th className="text-left px-4 py-2">Origen</th>
-                <th className="text-left px-4 py-2">Destino</th>
-                <th className="text-left px-4 py-2">Distancia</th>
-                <th className="text-left px-4 py-2">Estado</th>
-                <th className="text-left px-4 py-2">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {items.map((q) => (
-                <tr key={q.id} className="border-t">
-                    <td className="px-4 py-2">{q.id}</td>
-                    <td className="px-4 py-2">{q.user_id}</td>
-                    <td className="px-4 py-2">{q.customer_name}</td>
-                    <td className="px-4 py-2">{q.origin || ''}</td>
-                    <td className="px-4 py-2">{q.destination || ''}</td>
-                    <td className="px-4 py-2">{q.distance || 0} km</td>
-                    <td className="px-4 py-2">{q.status}</td>
-                    <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => openDetail(q.id)} className="px-3 py-1 rounded-lg border border-slate-300 hover:bg-slate-50">
-                        Ver
-                        </button>
-                        <button onClick={() => removeQuote(q.id)} className="px-3 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50">
-                        Eliminar
-                        </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {quotes.length === 0 ? (
+          <div className="col-span-full py-24 bg-white rounded-[3rem] border-4 border-dashed border-slate-100 text-center space-y-4">
+             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
+                <Calendar className="w-8 h-8 text-slate-300" />
+             </div>
+             <div className="space-y-1">
+                <p className="text-xl font-black text-slate-800">Sin Solicitudes Pendientes</p>
+                <p className="text-slate-400 font-medium">Las nuevas cotizaciones aparecerán automáticamente aquí.</p>
+             </div>
+          </div>
+        ) : (
+          quotes.map((quote) => (
+            <div key={quote.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative">
+              
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center text-blue-600 shadow-sm">
+                      <User className="w-5 h-5" />
                     </div>
-                    </td>
-                </tr>
-                ))}
-                {items.length === 0 && (
-                <tr>
-                    <td className="px-4 py-6 text-slate-500" colSpan={8}>Sin cotizaciones</td>
-                </tr>
-                )}
-            </tbody>
-            </table>
-        </div>
-
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-600">
-          Página {page}{total ? ` de ${Math.max(1, Math.ceil(total / pageSize))}` : ''} {total ? `· ${total} resultados` : ''}
-        </div>
-        <div className="flex items-center gap-2">
-          <button disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))} className={`px-3 py-2 rounded ${page <= 1 ? 'bg-slate-100 text-slate-400' : 'bg-slate-200'}`}>Anterior</button>
-          <button
-            disabled={total ? page >= Math.ceil(total / pageSize) : items.length < pageSize}
-            onClick={() => setPage(page + 1)}
-            className={`px-3 py-2 rounded ${total ? (page >= Math.ceil(total / pageSize) ? 'bg-slate-100 text-slate-400' : 'bg-slate-200') : (items.length < pageSize ? 'bg-slate-100 text-slate-400' : 'bg-slate-200')}`}
-          >
-            Siguiente
-          </button>
-        </div>
-      </div>
-
-        {detail && (
-            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
-            <div className="font-semibold">Detalle #{detail.id}</div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3 border rounded-lg">
-                <div className="text-slate-500 text-sm">Origen</div>
-                <div className="font-medium">{detail.origin || '-'}</div>
+                      <h3 className="font-black text-slate-800 text-sm leading-tight">{quote.userName || 'Cliente Web'}</h3>
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <Calendar className="w-3 h-3" />
+                        {quote.id.substring(0, 8).toUpperCase()}
+                      </div>
+                    </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getStatusStyle(quote.status)}`}>
+                    {quote.status}
+                  </span>
                 </div>
-                <div className="p-3 border rounded-lg">
-                <div className="text-slate-500 text-sm">Destino</div>
-                <div className="font-medium">{detail.destination || '-'}</div>
+                <div className="space-y-3 mb-3">
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Desde</span>
+                        <span className="font-bold text-slate-700 text-sm flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 text-blue-500" />
+                          {quote.origin}
+                        </span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-300" />
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hasta</span>
+                        <span className="font-bold text-slate-700 text-sm flex items-center gap-1.5">
+                          {quote.destination}
+                          <MapPin className="w-3 h-3 text-indigo-500" />
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100/50 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      <span className="flex items-center gap-2">
+                        <Truck className="w-3 h-3" /> {quote.truck}
+                      </span>
+                      <span className="bg-white px-2.5 py-0.5 rounded-full border border-slate-100 text-blue-600 text-[10px]">{quote.distance} KM</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-3 border rounded-lg">
-                <div className="text-slate-500 text-sm">Distancia</div>
-                <div className="font-medium">{detail.distance || 0} km</div>
+                <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Monto Total</span>
+                    <span className="text-lg font-black text-slate-900">${quote.totalPrice.toLocaleString()}</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button 
+                      onClick={() => onUpdateStatus(quote.id, 'Completado')}
+                      title="Despachar"
+                      className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => onView(quote.id)} className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setMenuId(prev => prev === quote.id ? null : quote.id)} className="p-2 bg-slate-100 text-slate-400 rounded-xl hover:bg-slate-200 transition-all" title="Opciones">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
+                {menuId === quote.id ? (
+                  <div className="absolute right-6 bottom-20 z-40 bg-white border border-slate-200 rounded-xl shadow-lg w-44 overflow-hidden">
+                    <button onClick={() => { onView(quote.id); setMenuId(null); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-700 text-sm">Ver detalle</button>
+                    <div className="border-t border-slate-100"></div>
+                    <button onClick={() => { onUpdateStatus(quote.id, 'Pendiente'); setMenuId(null); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-700 text-sm">Marcar Pendiente</button>
+                    <button onClick={() => { onUpdateStatus(quote.id, 'Reservado'); setMenuId(null); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-700 text-sm">Marcar Reservado</button>
+                    <button onClick={() => { onUpdateStatus(quote.id, 'Completado'); setMenuId(null); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-700 text-sm">Marcar Completado</button>
+                  </div>
+                ) : null}
             </div>
-            <div className="flex items-center gap-2">
-                <select className="border rounded px-2 py-1" value={editStatus} onChange={e => setEditStatus(e.target.value)}>
-                <option value="Reservado">Reservado</option>
-                <option value="En Proceso">En Proceso</option>
-                <option value="Completado">Completado</option>
-                <option value="Cancelado">Cancelado</option>
-                </select>
-                <button onClick={saveStatus} className="px-3 py-2 bg-blue-600 text-white rounded">Guardar</button>
-                <button onClick={() => setDetail(null)} className="px-3 py-2 border rounded">Cerrar</button>
-            </div>
-            </div>
+          ))
         )}
+      </div>
+      {detail ? (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="relative z-50 bg-white rounded-3xl w-full max-w-2xl border border-slate-100 shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div className="font-black text-slate-900">Detalle de Cotización #{String(detail.id)}</div>
+              <button onClick={onCloseDetail} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3 border rounded-xl">
+                  <div className="text-slate-500 text-sm">Origen</div>
+                  <div className="font-semibold">{detail.origin || '-'}</div>
+                </div>
+                <div className="p-3 border rounded-xl">
+                  <div className="text-slate-500 text-sm">Destino</div>
+                  <div className="font-semibold">{detail.destination || '-'}</div>
+                </div>
+                <div className="p-3 border rounded-xl">
+                  <div className="text-slate-500 text-sm">Distancia</div>
+                  <div className="font-semibold">{Number(detail.distance || 0)} km</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="font-semibold">Cargas</div>
+                <div className="space-y-1">
+                  {Array.isArray(detail.loads) && detail.loads.length > 0 ? (
+                    detail.loads.map((l: any) => (
+                      <div key={l.id} className="flex items-center justify-between border rounded-lg px-3 py-2">
+                        <div>{l.description}</div>
+                        <div className="text-slate-600">{l.blocks} UC</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-slate-500">Sin cargas</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-    );
-    };
+      ) : null}
+    </div>
+  );
+};

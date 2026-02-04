@@ -1,194 +1,121 @@
-import React, { useEffect, useState } from 'react';
-import { PlusCircle, Trash2 } from 'lucide-react';
 
-interface UserRow {
-  id: number;
-  email: string;
-  name: string | null;
-  role: string;
-}
+  import React from 'react';
+  import { User as UserType } from '../../types';
+  import { User, Mail, Shield, History, Settings2, MoreVertical, Search, Key, Trash2 } from 'lucide-react';
 
-interface Props {
-  apiBase: string;
-  apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-}
+  interface Props {
+    users: UserType[];
+    onConfigure: (id: string, nextRole: 'admin' | 'client') => void;
+    onDelete: (id: string) => void;
+    onSearch?: (term: string) => void;
+  }
 
-export const AdminUsers: React.FC<Props> = ({ apiBase, apiFetch }) => {
-  const [items, setItems] = useState<UserRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ email: '', password: '', name: '', role: 'usuario' });
-  const [q, setQ] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [total, setTotal] = useState<number | null>(null);
-
-  const loadList = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('pageSize', String(pageSize));
-      if (q) params.set('q', q);
-      const res = await apiFetch(`${apiBase}/admin/users?${params.toString()}`);
-      if (!res.ok) throw new Error('Error al listar usuarios');
-      const data = await res.json();
-      const rows = Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [];
-      setItems(rows);
-      if (data && typeof data.total !== 'undefined') {
-        const t = parseInt(String(data.total), 10);
-        setTotal(Number.isNaN(t) ? null : t);
-      } else {
-        setTotal(null);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error desconocido');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreate = async () => {
-    if (!form.email || !form.password) {
-      alert('Email y password son requeridos');
-      return;
-    }
-    try {
-      const r = await apiFetch(`${apiBase}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, password: form.password, name: form.name }),
-      });
-      if (!r.ok) {
-        const t = await r.text();
-        throw new Error(t || 'Error al crear usuario');
-      }
-      const created = await r.json().catch(() => null);
-      if (created && form.role && form.role !== 'usuario') {
-        const u = await apiFetch(`${apiBase}/admin/users/${created.id}/role`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: form.role }),
-        });
-        if (!u.ok) throw new Error('Error al asignar rol');
-      }
-      setForm({ email: '', password: '', name: '', role: 'usuario' });
-      loadList();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error desconocido');
-    }
-  };
-
-  const handleRole = async (id: number, role: string) => {
-    try {
-      const r = await apiFetch(`${apiBase}/admin/users/${id}/role`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      });
-      if (!r.ok) throw new Error('Error al actualizar rol');
-      loadList();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error desconocido');
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Eliminar usuario?')) return;
-    try {
-      const r = await apiFetch(`${apiBase}/admin/users/${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error('Error al eliminar usuario');
-      loadList();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error desconocido');
-    }
-  };
-
-  useEffect(() => {
-    loadList();
-  }, [apiBase, page, pageSize, q]);
-
-  if (loading) return <div>Cargando usuarios...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-white p-4 rounded-xl border border-slate-200">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <input className="border rounded px-2 py-1" placeholder="Buscar por email/nombre…" value={q} onChange={e => { setQ(e.target.value); setPage(1); }} />
-          <select className="border rounded px-2 py-1" value={pageSize} onChange={e => { setPageSize(parseInt(e.target.value, 10)); setPage(1); }}>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-          <button onClick={() => { setQ(''); setPage(1); }} className="border rounded px-3 py-1">Limpiar</button>
+  export const AdminUsers: React.FC<Props> = ({ users, onConfigure, onDelete, onSearch }) => {
+    const [menuId, setMenuId] = React.useState<string | null>(null);
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <div>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Directorio de Usuarios</h2>
+            <p className="text-slate-500 font-medium">Controla accesos, roles y audita la actividad de clientes.</p>
+          </div>
+          <div className="relative group">
+            <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Buscar por nombre o email..." 
+              className="pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all w-full lg:w-80"
+              onChange={(e) => onSearch?.(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
-      <div className="bg-white p-4 rounded-xl border border-slate-200">
-        <div className="font-semibold mb-3">Crear usuario</div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <input className="border rounded px-2 py-1" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <input className="border rounded px-2 py-1" type="password" placeholder="Password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
-          <input className="border rounded px-2 py-1" placeholder="Nombre" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          <select className="border rounded px-2 py-1" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-            <option value="usuario">usuario</option>
-            <option value="admin">admin</option>
-          </select>
-          <button onClick={handleCreate} className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded">
-            <PlusCircle className="w-4 h-4" /> Crear
-          </button>
-        </div>
-      </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="text-left px-4 py-2">ID</th>
-              <th className="text-left px-4 py-2">Email</th>
-              <th className="text-left px-4 py-2">Nombre</th>
-              <th className="text-left px-4 py-2">Rol</th>
-              <th className="text-left px-4 py-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((u) => (
-              <tr key={u.id} className="border-t">
-                <td className="px-4 py-2">{u.id}</td>
-                <td className="px-4 py-2">{u.email}</td>
-                <td className="px-4 py-2">{u.name || ''}</td>
-                <td className="px-4 py-2">
-                  <select value={u.role} onChange={e => handleRole(u.id, e.target.value)} className="border rounded px-2 py-1">
-                    <option value="usuario">usuario</option>
-                    <option value="admin">admin</option>
-                  </select>
-                </td>
-                <td className="px-4 py-2">
-                  <button onClick={() => handleDelete(u.id)} className="text-red-600 hover:text-red-800 flex items-center gap-1">
-                    <Trash2 className="w-4 h-4" /> Eliminar
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {users.map((user) => (
+            <div key={user.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative">
+              <button 
+                className="absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+                onClick={() => setMenuId(prev => prev === String(user.id) ? null : String(user.id))}
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {menuId === String(user.id) ? (
+                <div className="absolute right-4 top-12 z-40 bg-white border border-slate-200 rounded-xl shadow-lg w-44 overflow-hidden">
+                  {user.isAdmin ? (
+                    <button 
+                      onClick={() => { onConfigure(user.id, 'client'); setMenuId(null); }} 
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-700 text-sm"
+                    >
+                      Quitar privilegios de Admin
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => { onConfigure(user.id, 'admin'); setMenuId(null); }} 
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-700 text-sm"
+                    >
+                      Convertir en Admin
+                    </button>
+                  )}
+                  <div className="border-t border-slate-100"></div>
+                  <button 
+                    onClick={() => { onDelete(user.id); setMenuId(null); }} 
+                    className="w-full text-left px-3 py-2 hover:bg-red-50 text-slate-700 text-sm"
+                  >
+                    Eliminar usuario
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-600">
-          Página {page}{total ? ` de ${Math.max(1, Math.ceil(total / pageSize))}` : ''} {total ? `· ${total} resultados` : ''}
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-sm">
+                    <User className="w-5 h-5" />
+                  </div>
+                  {user.isAdmin && (
+                    <div className="absolute -bottom-1 -right-1 bg-white p-1 rounded-lg shadow border border-slate-100">
+                      <Shield className="w-3.5 h-3.5 text-blue-500" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-sm flex items-center gap-1.5 leading-tight">
+                    {user.name}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <Mail className="w-3 h-3" />
+                    {user.email}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 py-4 border-y border-slate-50">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Mudanzas</span>
+                  <div className="flex items-center gap-2 font-black text-slate-800 text-sm">
+                    <History className="w-3.5 h-3.5 text-blue-400" />
+                    {user.history?.length || 0}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Nivel de Acceso</span>
+                  <div className={`font-black text-[10px] uppercase tracking-widest ${user.isAdmin ? 'text-blue-600' : 'text-slate-600'}`}>
+                    {user.isAdmin ? 'Administrador' : 'Cliente Estándar'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button onClick={() => onConfigure(user.id, user.isAdmin ? 'client' : 'admin')} className="flex-1 bg-slate-900 hover:bg-black text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm">
+                  <Settings2 className="w-4 h-4" />
+                  Configurar
+                </button>
+                <button onClick={() => onDelete(user.id)} className="p-2.5 border border-slate-100 text-slate-400 rounded-xl hover:border-red-100 hover:text-red-500 hover:bg-red-50 transition-all">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))} className={`px-3 py-2 rounded ${page <= 1 ? 'bg-slate-100 text-slate-400' : 'bg-slate-200'}`}>Anterior</button>
-          <button
-            disabled={total ? page >= Math.ceil(total / pageSize) : items.length < pageSize}
-            onClick={() => setPage(page + 1)}
-            className={`px-3 py-2 rounded ${total ? (page >= Math.ceil(total / pageSize) ? 'bg-slate-100 text-slate-400' : 'bg-slate-200') : (items.length < pageSize ? 'bg-slate-100 text-slate-400' : 'bg-slate-200')}`}
-          >
-            Siguiente
-          </button>
-        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
